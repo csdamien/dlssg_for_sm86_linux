@@ -1,151 +1,158 @@
-# DLSSG Native 0.2.4
+# DLSSG-SM86 on Linux / Proton
 
-简体中文 | [English](README.en.md)
+> **This fork exists for one purpose: getting `dlssg_for_sm86` working under Wine/Proton on Linux.**
+> For the actual mod — the `version.dll` proxy, `dlssg_sm86.ini`, Windows install steps, releases,
+> and everything else — go to the original repo:
+>
+> **[sdli1995/dlssg_for_sm86](https://github.com/sdli1995/dlssg_for_sm86)**
+>
+> Install it there first, exactly as documented. Come back here only once you've hit the crash
+> described below.
 
-Windows x64 / D3D12。运行文件为 `version.dll` 和 `dlssg_sm86.ini`。
+## The problem
 
-自有 C++ 包装层、SM75/SM86 PTX/Cubin、310.1 模型和推理图都在一个 DLL 内。运行时不解压、加载或内存映射原厂 `nvngx_dlssg.dll`；仍使用系统 NVIDIA NGX/NVAPI/CUDA 驱动接口，无需 CUDA Toolkit。
+Install the mod's `version.dll` on Linux (any Proton flavor, or vanilla Wine) and the game exits
+immediately. `PROTON_LOG=1` shows:
 
-## 0.2.4 简略更新说明
-
-- **显存修复**：修复输入纹理重建后旧帧资源滞留，资源实际销毁后回收视图，减少长时间运行时显存持续增长的风险。
-- **历史帧修复**：修复 HUD-less / 畸变输入出现、缺失及 Reset 切换时的历史更新错误，处理已离线复现的错误生成帧问题。
-- **有效性标记**：补齐用于跳过无效生成帧的输出标记，避免调用方沿用旧值。
-- **默认配置不变**：保留精确性能优化，近似采样仍可选；五项 INI 与五种已签名代理入口保持不变。新增动态输入、SM75 路由和显存回归；报告中的游戏闪烁仍需现场复测。
-
-## 运行要求
-
-- **系统与游戏**：Windows 10/11 x64、D3D12，以及能够通过本 Mod 启用 DLSS 帧生成的游戏。CPU 和系统内存仍需满足游戏自身要求。
-- **显卡与路由**：SM86 路由面向 RTX 30 系列；SM75 路由面向 RTX 20 系列。当前实卡验证为 RTX 3080 Ti，SM75 在该卡上通过 PTX 前向测试，物理 Turing/Cubin 仍待验证。
-- **驱动与依赖**：需要 NVIDIA 驱动提供 NGX/NVAPI/CUDA 接口；本次使用驱动 591.86 验证，此版本号不代表最低驱动要求。运行时无需安装 CUDA Toolkit 或 Python。
-- **显存**：需同时容纳游戏本体、插帧新增资源和场景波动余量。系统及其他程序也会占用显存，应关注游戏实际可用的显存预算。
-
-### 不同配置的插帧额外显存参考
-
-以下为 0.2.4 在 RTX 3080 Ti / 驱动 591.86 / PTX 下的参考预算，覆盖 SM86 默认精确、SM86 可选近似及 SM75 路由，共 27 组补测。按最终**输出分辨率**选行；例如 4K 输出 + DLSS 性能档仍使用 4K 这一行。
-
-| 输出分辨率 | 2X：额外显存估计 | 3X：额外显存估计 | 4X：额外显存估计 |
-|---|---:|---:|---:|
-| 1080p / 1920×1080 | 约 320 MiB | 约 330 MiB | 约 340 MiB |
-| 2K / 2560×1440 | 约 490 MiB | 约 510 MiB | 约 520 MiB |
-| 4K / 3840×2160 | 约 700 MiB | 约 740 MiB | 约 770 MiB |
-
-表值按预热后的进程本地显存增量计算，扣除基准程序预存输入和测试输出的占用，再加上一组 `M` 张 32 位输出缓冲，向上取整到 10 MiB（1 GiB = 1024 MiB）。这是稳定运行时的估计；游戏本体、额外在途帧、交换链及更大像素格式的开销还需另计，**实际应留出高于表值的额外显存余量**。这些数值不是整款游戏的最低显存容量或峰值保证；SM75 数值为 3080 Ti 上的路由参考。
-
-本次测得默认精确档和可选近似档的显存占用相同；SM75 路由差异小于 1 MiB，采用同一取整预算。2X/3X/4X 复用常驻推理资源，因此降低倍率主要减少输出缓冲，未必显著降低总显存占用。
-
-**显存不足或超过 Windows 分配的显存预算时，可能出现偶发卡顿、帧时间尖峰，即使平均 FPS 看起来正常。** 可降低贴图、输出分辨率或光追设置，并减少后台显存占用，为场景切换和资源加载留出余量。[Microsoft 显存预算说明](https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_4/nf-dxgi1_4-idxgiadapter3-queryvideomemoryinfo)
-
-## 安装与升级
-
-适用 Windows x64、D3D12 游戏及 NVIDIA 驱动。无需额外安装 Python 或 CUDA Toolkit。当前模型为 310.1；Vulkan 支持见下一版本计划。
-
-1. **完全退出游戏。** 首次安装直接进行下一步；从旧版升级时，把之前安装的本项目代理 DLL 和 `dlssg_sm86.ini` 备份到单独目录，再移出游戏目录中的旧代理。保留其他 Mod 的文件。
-2. **找到实际渲染 EXE 的目录。** 《黑神话：悟空》为 `D:\SteamLibrary\steamapps\common\BlackMythWukong\b1\Binaries\Win64`，其中应有 `b1-Win64-Shipping.exe`。
-3. **复制一个代理 DLL 和 INI。** 默认复制包根目录的 `version.dll` 与 `dlssg_sm86.ini`。若这个 DLL 名称被其他 Mod 占用，或游戏不会加载它，从 `altnative` 选择一个可用入口，按下表安装。每次只保留本项目的一个代理。
-4. **选择显卡路由。** 3080 Ti 保持 `Router=SM86, KernelImage=PTX`；SM75/Turing 使用 `Router=SM75, KernelImage=PTX`。同一 INI 适用于全部入口。
-5. **重启游戏并启用 DLSS 帧生成。** 在游戏中选择 2X/3X/4X；`MaxGeneratedFrames=3` 表示允许最多额外生成三帧，实际倍率由游戏请求。
-
-| 入口 | 包内位置 | 用法 |
-|---|---|---|
-| 默认 | `version.dll` | 与 INI 放到渲染 EXE 旁 |
-| 替代 | `altnative/winmm.dll` | 选择游戏会加载的名称，原名复制到 EXE 旁 |
-| 替代 | `altnative/dinput8.dll` | 同上 |
-| 替代 | `altnative/winhttp.dll` | 同上 |
-| 替代 | `altnative/dxgi.dll` | 同上；当前仍为 D3D12 管线 |
-
-所有 DLL 都包含完整推理资源。替代入口复制时保持原文件名；其他文件可保留在下载目录。不额外混用上游 SM75 包中的代理、注入器或后端。
-
-`HardwareBilinear=0` 为默认精确档；需要可选近似采样时改为 `1`，仅 SM86 生效，生成像素可能变化。两档预设见 [INI 说明](docs/NATIVE_INI.md)。更改配置后重启游戏。
-
-排查加载时临时设置 `Logging.Level=2`，日志位于 EXE 旁 `dlssg_sm86/logs`；若未出现项目日志，核对渲染 EXE 目录和所选 DLL 是否由游戏加载。正式游玩可恢复 `Level=1`。保留游戏自带的 DLSSG 文件。卸载时退出游戏，移除本次选择的代理 DLL 和 INI，需要回退时恢复备份。
-
-## 杀软误报与签名
-
-本项目通过系统 DLL 代理和 LoadLibrary hook 接入游戏，这类行为可能被安全软件的启发式检测误报。Native 化已经取消原厂 feature DLL 的解压和手动映射，但仍需保留接入 hook；是否属于误报，要结合具体检测结果由对应厂商复核。
-
-全部五个 DLL 都使用 **DLSSG Native Project 项目自签证书**，可在 Windows 文件属性的“数字签名”中查看。签名用于核验签名者和文件完整性，**不提供 Windows 默认信任，也不保证消除杀软告警**。证书链不受信任、SmartScreen 的信誉提示与杀软检出属于不同检查；自签文件仍可能收到 SmartScreen 提示。[Microsoft SmartScreen 说明](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation)
-
-遇到告警时，先核对下载来源及发布 ZIP 旁的 `.sha256`，再记录安全软件名称、检测名称、病毒库版本和被检测 DLL 的 SHA256，向对应厂商提交误报复核。Microsoft Defender 的提交入口为 [Microsoft 文件分析](https://www.microsoft.com/en-us/wdsi/filesubmission)；核对哈希和签名不能代替厂商的检测结论。
-
-## 统一基线：Release 0.1.0 → Native 0.2.4
-
-本表统一使用 **2026-09-07 的 `dist/Release/version.dll`**，SHA256 `03d445237d519ac48cd9226278a0f07aecd7ac597697697eb64404e1d51b3c5a`。本表两档使用本次已签名 0.2.4 DLL `c844646d…`，与运行包中的文件相同。九个条件全部重新实测，GPU 为 RTX 3080 Ti / SM86，驱动 591.86。
-
-单位为**每个真实帧对应整组帧生成的 GPU 毫秒数**，包含共用预处理；2X/3X/4X 分别生成 1/2/3 帧。默认精确档为 `HardwareBilinear=0`，可选近似档为 `1`。
-
-| 分辨率 | 倍率 | Release 0.1.0 (ms) | 0.2.4 默认精确 (ms) | 耗时降低 | 0.2.4 可选近似 (ms) | 耗时降低 |
-|---|---:|---:|---:|---:|---:|---:|
-| 1080p | 2X | 1.530 | 0.990 | 35.26% | 0.981 | 35.90% |
-| 1080p | 3X | 2.252 | 1.594 | 29.23% | 1.572 | 30.21% |
-| 1080p | 4X | 2.979 | 2.201 | 26.13% | 2.160 | 27.49% |
-| 2K / 1440p | 2X | 2.497 | 1.638 | 34.38% | 1.629 | 34.77% |
-| 2K / 1440p | 3X | 3.774 | 2.610 | 30.84% | 2.575 | 31.78% |
-| 2K / 1440p | 4X | 4.958 | 3.579 | 27.82% | 3.706 | 25.26% |
-| 4K | 2X | 3.186 | 2.099 | 34.12% | 2.066 | 35.14% |
-| 4K | 3X | 5.071 | 3.453 | 31.90% | 3.366 | 33.61% |
-| 4K | 4X | 7.115 | 4.804 | 32.48% | 4.752 | 33.20% |
-
-耗时降低统一按 `(Release 耗时 − 当前耗时) / Release 耗时` 计算，使用未取整数据。毫秒数为各轮中位数的中位数。每个条件四轮，旧 Release 在每轮前后各测一次，精确/近似顺序交替；每次测 256 组，共 144 次运行。GPU 未锁频，未删除异常值。
-
-所有版本使用相同的合成《悟空》资源格式输入、PTX、HIGH=100 计算队列，每次 Evaluate 独立提交；1.5 秒负载预热后 Reset，再预热 64 帧。旧 Release 的内核格式由 Auto/Cubin 显式改为 PTX，其余计算路径来自该原始 DLL。旧版显式加载与内嵌资源一致的 310.1 feature DLL；初始化、解压和加载时间均不计入本表。
-
-精确档计时后输出与旧 Release 逐字节一致；近似档的真实帧及 alpha 不变，生成 RGB 有差异。这里是 GPU pipeline 耗时，整组跨度包含 Evaluate 之间的提交空隙；游戏渲染、Present、上传和读回不计入。不能将耗时降幅当作游戏 FPS 增幅。
-
-本轮 1440p 4X 测量波动较大，近似档中位数慢于默认档，表中保留原始结果。追加 20 次与 0.2.3 的交错对照后，两版默认 / 近似档的中位数差异均不足 0.4%，未复现明显回退。近似采样不保证在所有条件下更快，建议优先使用默认精确档。
-
-## 插帧后帧率怎么估算
-
-先在**相同场景、输出分辨率、DLSS 超分档位和画质设置**下关闭帧生成，得到帧率 `F_off`。用 `1000 / F_off` 换算基础帧时间，再从上表按分辨率、插帧倍率和默认精确／可选近似配置选择整组插帧耗时 `T_FG`（毫秒）。
-
-```text
-基础帧时间 T_base (ms) = 1000 / F_off
-开启插帧后的帧组时间 T_group (ms) ≈ T_base + T_FG
-真实帧／帧组速率 G (组/s) ≈ 1000 / T_group
-插帧后总帧率 F_out (FPS) ≈ G × M
-                       = 1000 × M / (1000 / F_off + T_FG)
+```
+Loaded ...\bin\x64\VERSION.dll ... native
+Loaded C:\windows\system32\version.dll ... builtin
+err:module:loader_init "VERSION.dll" failed to initialize, aborting
+Initializing dlls for ...\<Game>.exe failed, status c0000142
 ```
 
-`M` 是总倍率（2X/3X/4X 对应 2/3/4）。一组包含一个真实帧和 `M − 1` 个生成帧；**上表的 `T_FG` 已包含整组生成帧和共用预处理，不能再乘 `M − 1`**。在这个估算中，开启插帧后的真实帧／帧组速率 `G` 低于关闭插帧的 `F_off`。
+No `dlssg_sm86/logs` directory ever gets created — the proxy fails before its own logger opens.
 
-例如，未开帧生成约 **50 FPS**，基础帧时间为 **20 ms**。采用上表 RTX 3080 Ti / SM86 的 **4K 4X** 插帧组耗时：
+### Why
 
-| 配置 | 插帧组耗时 T_FG (ms) | 估计帧组时间 (ms) | 估计真实帧／帧组速率 (组/s) | 估计插帧后总帧率 |
-|---|---:|---:|---:|---:|
-| Release 0.1.0 | 7.115 | 27.115 | 36.9 | 147.5 FPS |
-| 0.2.4 默认精确（HardwareBilinear=0） | 4.804 | 24.804 | 40.3 | 161.3 FPS |
-| 0.2.4 可选近似（HardwareBilinear=1） | 4.752 | 24.752 | 40.4 | 161.6 FPS |
+Traced with `WINEDEBUG=+relay,+seh,+module`. The proxy's `DllMain` looks up a function called
+`GetFileVersionInfoByHandle` on the real system `version.dll`:
 
-1080p、1440p 或 2X/3X 时，换用上表对应行，并填入该画质设置下自己测得的 `F_off`。这些插帧耗时来自 3080 Ti / SM86；其他显卡或 SM75 路由应使用对应实测耗时。
+```
+Call KERNEL32.GetProcAddress(hVersionDll, "GetFileVersionInfoByHandle")
+warn:module:LdrGetProcedureAddress "GetFileVersionInfoByHandle" not found in "version.dll"
+Ret  KERNEL32.GetProcAddress() retval=00000000
+  9× RtlDeleteCriticalSection, 2× FlsFree   ← a teardown path, not forward progress
+Ret  PE DLL (VERSION.dll, PROCESS_ATTACH) retval=0
+err:module:loader_init "VERSION.dll" failed to initialize, aborting
+```
 
-这是将基础渲染时间与插帧组开销相加的**粗略估计**。游戏中的 GPU 资源争用、同步、CPU 开销、限帧及显示器刷新率会影响最终结果；估计值不保证等于计数器读数或实际显示帧率。
+`GetFileVersionInfoByHandle` doesn't exist in **any** Wine build — checked directly via PE export
+tables on CachyOS Proton, GE-Proton (10-25 through 10-34), Valve's own Proton 8.0/9.0/10.0/Experimental,
+vanilla upstream WineHQ 11.0, and a staging+TKG patched build (11.17). All of them export only the
+classic set: `GetFileVersionInfo{A,W,ExA,ExW}` and `GetFileVersionInfoSize{A,W,ExA,ExW}`. Switching
+Proton flavors won't fix this — it's a gap in Wine itself, not a packaging bug in any one build.
 
-## 《黑神话：悟空》实测反馈
+## The fix
 
-用户提供的 RTX 3080 Ti 同场景近似读数：**4K 输出、DLSS 性能档、全景光线追踪关闭、全影视级画质**。关闭帧生成时约 **50 FPS**，开启 **4X** 后：
+A small forwarding shim stands in for `version.dll`. It passes all 16 real exports straight through
+to Wine's actual implementation (kept alongside it, renamed) and adds the one missing export as a
+harmless stub. The proxy only checks that the function *exists* at load time — it never needs to
+behave correctly to get past the check.
 
-| 状态 | 真实帧／帧组速率 | 含生成帧的总帧率 |
-|---|---:|---:|
-| 优化前 | 约 36 组/s | 约 144 FPS |
-| 0.2.3 性能优化后的用户反馈 | 约 40 组/s | 约 160 FPS |
+Source, `.def` file, a precompiled binary, and checksums are in [`linux-proton-fix/`](linux-proton-fix/).
 
-帧组速率和总帧率均提升约 **11.1%**，即约 **+4 组/s、+16 FPS**。这里记录的是用户反馈的游戏实测，不是上述公式计算出的结果，这份 0.2.3 历史反馈未在 0.2.4 中重新进行游戏测量。不能把离线插帧耗时降低的百分比直接当作游戏 FPS 增幅。
+**Scope:** installed into one Wine prefix's `system32` folder only. Your Proton installation itself
+is never touched — other games and prefixes on the same Proton build are unaffected, and it's two
+file deletions to undo.
 
-## 诊断与边界
+Confirmed working: RTX 3090, CachyOS Proton, Cyberpunk 2077, DLSSG Native 0.2.3 — sustained live 2×
+frame generation through a full play session, verified via the proxy's own event log.
 
-默认 `Logging.Level=1` 只记错误；排查时改为 `2` 或 `3`，日志在 `dlssg_sm86/logs`。可选 GPU 计时项见 INI 说明。
+## Steps
 
-调用方必须提供正反 clip 矩阵；最高生成 3 帧，不支持 6X/动态倍率、Reflex Warp 或 Reflex 自动矩阵查询。输入状态为 NON_PIXEL_SHADER_RESOURCE，输出为 UAV；调用方负责提交、同步和显示。本版优化的是 GPU 计算开销，不能将离线耗时下降当成实测游戏 FPS 增幅。
+### 1. Get the shim
 
-SM75 路由已在 3080 Ti 上完成前向 PTX 检查；物理 Turing/Cubin 和新版游戏长期运行仍待验证。
+It's a plain, portable Windows DLL — nothing about it is tied to a particular machine, Wine build,
+or GPU. It only ever calls `LoadLibraryA` / `GetProcAddress` on `kernel32.dll`.
 
-## SM75 来源与致谢
+**Path A — use the prebuilt copy (easiest).** Grab
+[`linux-proton-fix/version.dll`](linux-proton-fix/version.dll) directly. Verify it against
+[`linux-proton-fix/SHA256SUMS`](linux-proton-fix/SHA256SUMS):
 
-感谢 **Coldwood1026** 的 RTX 20 系列 / SM75 适配工作。GPU 资源引用 [dlssg_for_sm75](https://github.com/Coldwood1026/dlssg_for_sm75)（原名 `dlssg_for_sm86`）的固定提交 [c60c2aa…](https://github.com/Coldwood1026/dlssg_for_sm75/commit/c60c2aa363c7e66a523122aa5cec9c884658ad5f)，由本项目独立宿主加载和调度。来源及许可见 `THIRD_PARTY_NOTICES.txt`。
+```
+2f6978f6c311412fdc1a1582fcd83bc33314e37bd9fd837da83968f4d61c4539  version.dll
+```
 
-## 下一版本计划
+**Path B — build it yourself**, if you'd rather not run someone else's binary inside your game
+process. Takes a few minutes with a disposable container, nothing installs on your host:
 
-1. **Vulkan 支持**：增加 Vulkan 资源接入、互操作与同步，并验证 SM75/SM86 路径。
-2. **模型更新到最新 DLSSG**：实施时固定最新可用版本及哈希，适配模型/推理图并评估画质、显存和耗时。
+```bash
+podman run --rm -it -v "$PWD":/work -w /work registry.fedoraproject.org/fedora:42 bash
+dnf install -y mingw64-gcc
+```
 
-当前版本仍为 D3D12 + 310.1 模型。详细计划见 [路线图](docs/ROADMAP.md)。
+Grab [`linux-proton-fix/version_shim.c`](linux-proton-fix/version_shim.c) and
+[`linux-proton-fix/version_shim.def`](linux-proton-fix/version_shim.def), then, inside the
+container:
+
+```bash
+x86_64-w64-mingw32-gcc -shared -O2 -o version.dll version_shim.c version_shim.def
+```
+
+Produces a `version.dll` a few dozen KB in size — the same file Path A gives you.
+
+### 2. Find your prefix
+
+For a Steam/Proton game this is `steamapps/compatdata/<AppID>/pfx/drive_c/windows/system32/`. The
+AppID is the number in the game's Steam store URL.
+
+### 3. Swap in the shim
+
+With the game fully closed, in that `system32` folder:
+
+```bash
+# keep Wine's real implementation around under a new name
+cp -L version.dll version_orig.dll
+# replace the original (often a symlink) with the shim from step 1
+rm version.dll
+cp /path/to/version.dll .
+```
+
+`version.dll` is frequently a symlink into your Proton installation's own files, not a real file in
+the prefix — `cp -L` follows it and copies the actual bytes, which is what you want.
+
+### 4. Set the DLL override
+
+The proxy needs Wine to prefer the on-disk (`native`) `version.dll` over its own builtin, for this
+game specifically. Via `protontricks`, `winecfg`, or a direct registry edit, set:
+
+```
+version = native,builtin
+```
+
+If editing `pfx/user.reg` directly, make sure no Wine/Proton process is attached to the prefix
+first — a live `wineserver` holds the registry in memory and can silently overwrite a manual edit
+on exit.
+
+### 5. Launch and verify
+
+Start the game. If your Proton build has an opt-in native CUDA bridge (CachyOS Proton needs
+`PROTON_NVIDIA_NVCUDA=1` in launch options, for example), make sure it's set — without it, the
+driver-connection step below fails even with the shim in place.
+
+Check the proxy's own log, written next to the game executable at `bin/x64/dlssg_sm86/logs/*.jsonl`:
+
+| See this | Means |
+|---|---|
+| the log file exists at all | fixed — the `c0000142` abort is gone |
+| `"event":"ngx_driver_connected"` | connected to the NVIDIA driver, past the old wall |
+| `"event":"evaluate"`, repeating | live frame generation, once enabled in-game |
+
+In-game, a DLSS Frame Generation option should now appear in Graphics settings. Enable it, restart
+when prompted, and the log's `generated_count` field tells you the multiplier: `1` is 2×, `2` is 3×,
+`3` is 4×.
+
+## Troubleshooting
+
+| Symptom | Cause / fix |
+|---|---|
+| Still `c0000142` right after `VERSION.dll` loads | Shim isn't actually loading. Confirm `system32/version.dll` is the compiled file, not a leftover symlink — `file version.dll` should say `PE32+ executable`, not `symbolic link`. |
+| A *different* export now logs "not found" | Forwarder table is incomplete for your setup. Add that export to both `version_shim.c` and `version_shim.def`, following the existing pattern, and recompile. |
+| No frame-gen toggle appears in-game | Separate, game-specific issue — several upstream reports describe this happening even on native Windows for certain titles. Not something this shim addresses. |
+| `ngx_driver_connected` never appears | CUDA driver isn't reachable. Check your Proton build's CUDA-bridge launch option, and confirm the game isn't running inside a container/sandbox that hides the NVIDIA driver libraries from the process. |
+
+---
+
+This shim is an independent, unofficial workaround — not written or endorsed by the mod's author.
+Discussion: [upstream issue #10](https://github.com/sdli1995/dlssg_for_sm86/issues/10).
