@@ -16,6 +16,6 @@ Installe PyQt6.
 
 Telecharger et lancer dlssg_sm86_proton_installer.py
 
-## Probleme:
+## Problemes:
 Parfois, on dirait que le programme remplace les fichiers telecharges par des fichiers vides, ce qui empeche de lancer le jeu. Si ca arrive, mettez a jour le cache et appliquez a nouveau.
 La traduction est a moitie finie et il manque les accents mais j'ai la flemme de continuer, surtout pour qqch que personne ne lira.
