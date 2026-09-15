@@ -1,6 +1,6 @@
 [Francais](README_fr.md) | **English**
 
-# GUI installer that automates the process seen in README_original.md. 
+# GUI installer that automates the process seen in [README_original](README_original.md). 
 
 Downloads the needed files from tb0ne's and sdli1995's repos.
 
