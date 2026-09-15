@@ -14,7 +14,7 @@ Copier la commande et la coller dans les proprietes du jeu steam.
 
 Installe PyQt6.
 
-Telecharger et lancer dlssg_sm86_proton_installer.py
+Telecharger et lancer [dlssg_sm86_proton_installer.py](dlssg_sm86_proton_installer.py).
 
 ## Problemes:
 Parfois, on dirait que le programme remplace les fichiers telecharges par des fichiers vides, ce qui empeche de lancer le jeu. Si ca arrive, mettez a jour le cache et appliquez a nouveau.
