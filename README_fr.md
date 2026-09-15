@@ -1,6 +1,6 @@
 Francais | [English](README.md)
 
-# Installeur avec interface graphique qui automatise les instructions de [README_original.md](README_original).
+# Installeur graphique qui automatise les instructions de [README_original.md](README_original).
 
 Telecharge les fichiers necessaires depuis les repos de tb0ne et sdli1995.
 
