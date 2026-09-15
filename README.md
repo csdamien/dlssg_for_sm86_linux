@@ -14,7 +14,7 @@ Then copy the command and add it to the game's steam properties. The command is 
 
 Install PyQt6.
 
-Download and run [dlssg_sm86_proton_installer.py](dlssg_sm86_proton_installer.py)
+Download and run [dlssg_sm86_proton_installer.py](dlssg_sm86_proton_installer.py).
 
 ## Issues:
 On some occasions, it looks like the program replaced the cached downloaded files by empty ones. Since it changes Proton's 'version.dll', your game will no longer launch (it will briefly launch a small window that says "Installing Game-Specific fixes, please wait").
