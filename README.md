@@ -1,7 +1,3 @@
-Requires PyQt6.
-
-Download and run dlssg_sm86_proton_installer.py
-
 # GUI installer that automates the process seen in README_original.md. 
 
 Downloads the needed files from tb0ne's and sdli1995's repos.
@@ -12,6 +8,11 @@ After pressing apply, select the game's exe (it doesn't change it, just adds 've
 
 Then copy the command and add it to the game's steam properties. The command is for proton-cachyos specifically, I don't know what other Proton versions it will work.
 
+## Instructions
+
+Install PyQt6.
+
+Download and run dlssg_sm86_proton_installer.py
 
 ## Issues:
 On some occasions, it looks like the program replaced the cached downloaded files by empty ones. Since it changes Proton's 'version.dll', your game will no longer launch (it will briefly launch a small window that says "Installing Game-Specific fixes, please wait").
